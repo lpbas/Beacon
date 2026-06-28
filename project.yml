@@ -1,0 +1,50 @@
+name: Beacon
+options:
+  bundleIdPrefix: com.lplaboratories
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # DEVELOPMENT_TEAM is intentionally not committed. Select your team in Xcode
+    # for local signed builds; release.sh passes it from .env at release time.
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  Beacon:
+    type: application
+    platform: macOS
+    sources:
+      - path: Beacon
+        excludes:
+          - "Info.plist"
+          - "Beacon.entitlements"
+    settings:
+      base:
+        PRODUCT_NAME: Beacon
+        PRODUCT_BUNDLE_IDENTIFIER: com.lplaboratories.beacon
+        INFOPLIST_FILE: Beacon/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Beacon/Beacon.entitlements
+        COMBINE_HIDPI_IMAGES: YES
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
+
+  beacon-selftest:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Beacon/Engine
+      - path: SelfTest
+    settings:
+      base:
+        PRODUCT_NAME: beacon-selftest
+        PRODUCT_BUNDLE_IDENTIFIER: com.lplaboratories.beacon-selftest
