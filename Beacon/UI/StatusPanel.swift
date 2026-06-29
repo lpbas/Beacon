@@ -9,8 +9,20 @@ struct StatusPanel: View {
     @Environment(AppRouter.self) private var router
     @Environment(\.openWindow) private var openWindow
 
+    /// Fixed row height so the list can be sized deterministically. A bare
+    /// ScrollView collapses to zero height in the self-sizing menu bar window,
+    /// so we give it an explicit height of up to `maxVisibleRows` rows.
+    private let rowHeight: CGFloat = 52
+    /// Showing a half row when there are more services hints that the list scrolls.
+    private let maxVisibleRows: CGFloat = 4.5
+
     private var enabledEntries: [WhitelistEntry] {
         store.entries.filter(\.isEnabled)
+    }
+
+    /// Height that shows all rows up to 4.5, beyond which the list scrolls.
+    private var listHeight: CGFloat {
+        min(CGFloat(enabledEntries.count), maxVisibleRows) * rowHeight
     }
 
     var body: some View {
@@ -25,7 +37,7 @@ struct StatusPanel: View {
             Divider()
             footer
         }
-        .frame(width: 320)
+        .frame(width: 330)
     }
 
     // MARK: - Header
@@ -33,18 +45,18 @@ struct StatusPanel: View {
     private var header: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("Beacon").font(.headline)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                Text("Beacon").font(.system(size: 15, weight: .semibold))
+                Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
             }
             Spacer()
             if !enabledEntries.isEmpty {
                 Button(engine.isAnyActive ? "Stop All" : "Start All") {
                     if engine.isAnyActive { engine.stopAll() } else { engine.startAll() }
                 }
-                .controlSize(.small)
             }
         }
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     private var subtitle: String {
@@ -61,11 +73,14 @@ struct StatusPanel: View {
             VStack(spacing: 0) {
                 ForEach(enabledEntries) { entry in
                     StatusRow(entry: entry)
-                    if entry.id != enabledEntries.last?.id { Divider() }
+                        .frame(height: rowHeight)
+                        .overlay(alignment: .bottom) {
+                            if entry.id != enabledEntries.last?.id { Divider() }
+                        }
                 }
             }
         }
-        .frame(maxHeight: 320)
+        .frame(height: listHeight)
     }
 
     private var emptyState: some View {
@@ -74,13 +89,12 @@ struct StatusPanel: View {
                 .font(.title)
                 .foregroundStyle(.secondary)
             Text("No services yet")
-                .font(.callout)
+                .font(.system(size: 14))
             Text("Discover services on your network or add them to your whitelist to start broadcasting.")
-                .font(.caption)
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             Button("Discover Services…") { open(.discovery) }
-                .controlSize(.small)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
@@ -100,7 +114,7 @@ struct StatusPanel: View {
                 Divider()
                 Button("Quit Beacon") { NSApplication.shared.terminate(nil) }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "ellipsis.circle").font(.system(size: 15))
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
@@ -109,10 +123,26 @@ struct StatusPanel: View {
         .padding(.vertical, 8)
     }
 
+    // MARK: - Navigation
+
     private func open(_ tab: MainTab) {
         router.mainTab = tab
         openWindow(id: WindowID.main)
-        NSApp.activate(ignoringOtherApps: true)
+        // Raise the app and the window. For a menu bar (accessory) app, openWindow
+        // alone can leave the window behind other apps' windows.
+        DispatchQueue.main.async {
+            if #available(macOS 14.0, *) {
+                NSApp.activate()
+            } else {
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            mainWindow()?.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    private func mainWindow() -> NSWindow? {
+        NSApp.windows.first { $0.identifier?.rawValue == WindowID.main }
+            ?? NSApp.windows.first { $0.title == "Beacon" && $0.styleMask.contains(.titled) }
     }
 }
 
@@ -125,21 +155,15 @@ private struct StatusRow: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.instanceName)
+                    .font(.system(size: 14))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                ServiceStateBadge(state: engine.runState(for: entry.id))
+                ServiceStateBadge(state: engine.runState(for: entry.id), font: .system(size: 12))
             }
             Spacer()
-            Button {
-                engine.toggle(entry)
-            } label: {
-                Image(systemName: engine.isActive(entry.id) ? "stop.fill" : "play.fill")
-            }
-            .buttonStyle(.borderless)
-            .help(engine.isActive(entry.id) ? "Stop broadcasting" : "Start broadcasting")
+            RunStopButton(isRunning: engine.isActive(entry.id)) { engine.toggle(entry) }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
     }
 }
 
@@ -151,10 +175,10 @@ private struct FooterButton: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 2) {
-                Image(systemName: systemImage)
-                Text(title).font(.system(size: 10))
+                Image(systemName: systemImage).font(.system(size: 14))
+                Text(title).font(.system(size: 11))
             }
-            .frame(minWidth: 56)
+            .frame(minWidth: 60)
             .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)

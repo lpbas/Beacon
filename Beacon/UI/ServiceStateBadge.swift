@@ -5,6 +5,7 @@ import SwiftUI
 struct ServiceStateBadge: View {
     let state: ServiceRunState
     var showsText = true
+    var font: Font = .caption
 
     var body: some View {
         HStack(spacing: 5) {
@@ -13,7 +14,7 @@ struct ServiceStateBadge: View {
                 .frame(width: 7, height: 7)
             if showsText {
                 Text(text)
-                    .font(.caption)
+                    .font(font)
                     .foregroundStyle(.secondary)
             }
         }

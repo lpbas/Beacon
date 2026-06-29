@@ -86,13 +86,7 @@ private struct WhitelistRow: View {
 
             if entry.isEnabled {
                 ServiceStateBadge(state: engine.runState(for: entry.id), showsText: false)
-                Button {
-                    engine.toggle(entry)
-                } label: {
-                    Image(systemName: engine.isActive(entry.id) ? "stop.fill" : "play.fill")
-                }
-                .buttonStyle(.borderless)
-                .help(engine.isActive(entry.id) ? "Stop broadcasting" : "Start broadcasting")
+                RunStopButton(isRunning: engine.isActive(entry.id)) { engine.toggle(entry) }
             } else {
                 Text("Paused").font(.caption).foregroundStyle(.secondary)
             }

@@ -14,19 +14,36 @@ struct DiscoveryView: View {
     @State private var resolveError: String?
     @State private var isResolving = false
 
+    // Browsing is a continuous live subscription, so we only show the spinner
+    // for a short window after (re)starting rather than forever.
+    @State private var isScanning = false
+    @State private var scanTask: Task<Void, Never>?
+    private let scanIndicatorSeconds: Double = 3
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
             content
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Presented as a bottom inset rather than a VStack sibling, so showing
+            // it does not resize the list and reset its scroll position.
             if let service = selectedService {
-                Divider()
-                detail(for: service)
+                VStack(spacing: 0) {
+                    Divider()
+                    detail(for: service)
+                }
+                .background(.regularMaterial)
             }
         }
         .navigationTitle("Discovery")
         .onAppear(perform: restart)
-        .onDisappear { browser.stop() }
+        .onDisappear {
+            browser.stop()
+            scanTask?.cancel()
+            isScanning = false
+        }
         .onChange(of: store.settings.discoveryServiceTypes) { _, _ in restart() }
         .onChange(of: selection) { _, _ in resolveSelection() }
     }
@@ -38,13 +55,13 @@ struct DiscoveryView: View {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
             TextField("Filter by name or type", text: $search)
                 .textFieldStyle(.plain)
-            if browser.isBrowsing {
+            if isScanning {
                 ProgressView().controlSize(.small)
             }
             Button(action: restart) {
                 Image(systemName: "arrow.clockwise")
             }
-            .help("Restart discovery")
+            .help("Scan again")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -56,7 +73,8 @@ struct DiscoveryView: View {
     private var content: some View {
         if browser.services.isEmpty {
             ContentUnavailableView {
-                Label("Searching the local network…", systemImage: "dot.radiowaves.left.and.right")
+                Label(isScanning ? "Searching the local network…" : "No services found",
+                      systemImage: "dot.radiowaves.left.and.right")
             } description: {
                 Text("Browsing \(store.settings.discoveryServiceTypes.count) service type(s) from your selected groups. Adjust them in Settings.")
             } actions: {
@@ -151,7 +169,17 @@ struct DiscoveryView: View {
 
     private func restart() {
         selection = nil
-        browser.start(types: store.settings.discoveryServiceTypes)
+        let types = store.settings.discoveryServiceTypes
+        browser.start(types: types)
+        // Show the scan spinner briefly; the browse itself keeps running live.
+        scanTask?.cancel()
+        isScanning = !types.isEmpty
+        guard isScanning else { return }
+        scanTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(scanIndicatorSeconds))
+            guard !Task.isCancelled else { return }
+            isScanning = false
+        }
     }
 
     private func add(_ service: DiscoveredService) {

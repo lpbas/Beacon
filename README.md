@@ -49,10 +49,6 @@ on the underlying issue: https://github.com/orbstack/orbstack/issues/342
 4. The first time Beacon uses the network, macOS asks for Local Network access.
    Allow it, otherwise discovery and broadcasting will not work.
 
-Note on Gatekeeper: until a build is notarized, macOS may refuse to open it on
-first launch. If that happens, right-click the app and choose Open, then confirm.
-Notarized release builds open normally.
-
 ## Usage
 
 1. Open the menu bar icon and choose Discover, or open the main window and select
