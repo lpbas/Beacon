@@ -10,6 +10,11 @@ struct SettingsView: View {
     @State private var importMessage: String?
     @State private var newType = ""
 
+    // Hidden "Crispy" easter egg, unlocked from the About screen.
+    @AppStorage(CrispyDefaults.unlocked) private var crispyUnlocked = false
+    @AppStorage(CrispyDefaults.usesCrispy) private var usesCrispyIcon = false
+    @State private var crispyMessage: String?
+
     var body: some View {
         @Bindable var store = store
         Form {
@@ -81,11 +86,30 @@ struct SettingsView: View {
                     Text(importMessage).font(.caption).foregroundStyle(.secondary)
                 }
             }
+
+            // Only appears after the About-screen easter egg is unlocked.
+            if crispyUnlocked {
+                Section {
+                    Text("Enable the bacon variant.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Toggle("Use the Crispy Beacon icon", isOn: $usesCrispyIcon)
+                    if let crispyMessage {
+                        Text(crispyMessage).font(.caption).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Extra Crispy Icon")
+                } footer: {
+                    Text("Beacon, not bacon. Though both announce themselves eventually.")
+                }
+            }
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
         .onAppear { store.settings.launchAtLogin = LoginItem.isEnabled }
         .onChange(of: store.settings.autoRefreshMinutes) { _, _ in engine.reconfigureAutoRefresh() }
+        .onChange(of: usesCrispyIcon) { _, newValue in
+            crispyMessage = newValue ? "Serving the crispy icon." : "Back to Beacon. Breakfast can wait."
+        }
     }
 
     // MARK: - Bindings

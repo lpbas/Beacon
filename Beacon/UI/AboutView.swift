@@ -1,6 +1,13 @@
 import SwiftUI
 
 struct AboutView: View {
+    @AppStorage(CrispyDefaults.unlocked) private var crispyUnlocked = false
+    @AppStorage(CrispyDefaults.usesCrispy) private var usesCrispyIcon = false
+
+    @State private var versionTapCount = 0
+    @State private var lastVersionTap = Date.distantPast
+    @State private var showUnlockMessage = false
+
     private var version: String {
         let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "-"
@@ -9,12 +16,20 @@ struct AboutView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 56))
-                .foregroundStyle(.tint)
+            headerIcon
             VStack(spacing: 4) {
                 Text("Beacon").font(.largeTitle.bold())
-                Text(version).foregroundStyle(.secondary)
+                // Tapping the version 5 times unlocks the hidden Crispy icon.
+                // Styled as plain text on purpose so it does not look tappable.
+                Text(version)
+                    .foregroundStyle(.secondary)
+                    .onTapGesture { registerVersionTap() }
+                if showUnlockMessage {
+                    Text("🥓 Crispy Mode unlocked.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                }
             }
 
             Text("Beacon re-broadcasts Bonjour/mDNS services on your local network, so other devices can see services that Docker/OrbStack on macOS won't relay, such as HomeKit bridges, Home Assistant, and more.")
@@ -38,5 +53,36 @@ struct AboutView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Crispy app-icon preview when enabled and the asset exists; otherwise the
+    /// normal symbol (fallback).
+    @ViewBuilder
+    private var headerIcon: some View {
+        if usesCrispyIcon, let crispy = StatusBarIconManager.appPreviewImage(for: .crispy) {
+            Image(nsImage: crispy)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 56, height: 56)
+        } else {
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.system(size: 56))
+                .foregroundStyle(.tint)
+        }
+    }
+
+    private func registerVersionTap() {
+        let now = Date()
+        if now.timeIntervalSince(lastVersionTap) > 2 { versionTapCount = 0 } // reset if taps are too slow
+        lastVersionTap = now
+        versionTapCount += 1
+        guard versionTapCount >= 5 else { return }
+        versionTapCount = 0
+        guard !crispyUnlocked else { return }
+        crispyUnlocked = true
+        withAnimation { showUnlockMessage = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            withAnimation { showUnlockMessage = false }
+        }
     }
 }

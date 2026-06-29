@@ -11,6 +11,10 @@ struct BeaconApp: App {
     @State private var engine: BroadcastEngine
     @State private var router = AppRouter()
 
+    /// Hidden easter-egg setting: when on (and the asset exists), the menu bar
+    /// shows the crispy/bacon icon instead of the default SF Symbol.
+    @AppStorage(CrispyDefaults.usesCrispy) private var usesCrispyIcon = false
+
     init() {
         let store = Store()
         _store = State(initialValue: store)
@@ -25,9 +29,15 @@ struct BeaconApp: App {
                 .environment(engine)
                 .environment(router)
         } label: {
-            Image(systemName: engine.isAnyActive
-                  ? "antenna.radiowaves.left.and.right"
-                  : "antenna.radiowaves.left.and.right.slash")
+            // Crispy variant when unlocked + enabled and the asset is present;
+            // otherwise the normal state-reflecting SF Symbol (unchanged).
+            if usesCrispyIcon, let crispy = StatusBarIconManager.statusBarImage(for: .crispy) {
+                Image(nsImage: crispy)
+            } else {
+                Image(systemName: engine.isAnyActive
+                      ? "antenna.radiowaves.left.and.right"
+                      : "antenna.radiowaves.left.and.right.slash")
+            }
         }
         .menuBarExtraStyle(.window)
 
