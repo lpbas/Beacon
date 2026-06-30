@@ -46,10 +46,7 @@ final class ServiceRegistrar {
                 if errorCode.isOK {
                     registrar.set(.registered(name: finalName))
                 } else {
-                    let message = Int(errorCode) == kDNSServiceErr_NameConflict
-                        ? "Name already in use on the network"
-                        : DNSSDError(code: errorCode, context: "Register reply").localizedDescription
-                    registrar.set(.failed(message))
+                    registrar.set(.failed(DNSSDError(code: errorCode, context: "Register reply").localizedDescription))
                 }
             }
         }
@@ -57,7 +54,7 @@ final class ServiceRegistrar {
         let err = txt.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> DNSServiceErrorType in
             DNSServiceRegister(
                 &ref,
-                DNSServiceFlags(kDNSServiceFlagsNoAutoRename),  // fail on conflict instead of renaming
+                0,  // allow auto-rename: a re-broadcast coexists with the original as "name (2)"
                 0,
                 name,
                 type,

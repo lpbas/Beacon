@@ -5,6 +5,7 @@ import SwiftUI
 /// whitelist.
 struct DiscoveryView: View {
     @Environment(Store.self) private var store
+    @Environment(BroadcastEngine.self) private var engine
     @Environment(AppRouter.self) private var router
 
     @State private var browser = ServiceBrowser()
@@ -89,6 +90,7 @@ struct DiscoveryView: View {
                             DiscoveryRow(
                                 service: service,
                                 isWhitelisted: isWhitelisted(service.name),
+                                isOwnRebroadcast: isOwnRebroadcast(service),
                                 add: { add(service) }
                             )
                             .tag(service.id)
@@ -106,7 +108,10 @@ struct DiscoveryView: View {
             HStack {
                 Text(service.name).font(.headline).lineLimit(1)
                 Spacer()
-                if isWhitelisted(service.name) {
+                if isOwnRebroadcast(service) {
+                    Label("Beacon re-broadcast", systemImage: "antenna.radiowaves.left.and.right")
+                        .foregroundStyle(.secondary).font(.caption)
+                } else if isWhitelisted(service.name) {
                     Label("In whitelist", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green).font(.caption)
                 } else {
@@ -165,6 +170,12 @@ struct DiscoveryView: View {
         store.entries.contains { $0.instanceName == name }
     }
 
+    /// True when this discovered service is one Beacon is itself advertising, so
+    /// we can flag it and prevent whitelisting a copy of our own re-broadcast.
+    private func isOwnRebroadcast(_ service: DiscoveredService) -> Bool {
+        engine.broadcastedNames.contains(service.name)
+    }
+
     // MARK: - Actions
 
     private func restart() {
@@ -208,6 +219,7 @@ struct DiscoveryView: View {
 private struct DiscoveryRow: View {
     let service: DiscoveredService
     let isWhitelisted: Bool
+    let isOwnRebroadcast: Bool
     let add: () -> Void
 
     var body: some View {
@@ -217,7 +229,15 @@ private struct DiscoveryRow: View {
                 Text(service.serviceType).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            if isWhitelisted {
+            if isOwnRebroadcast {
+                Text("Beacon")
+                    .font(.caption2.weight(.medium))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: Capsule())
+                    .foregroundStyle(.secondary)
+                    .help("This is Beacon's own re-broadcast")
+            } else if isWhitelisted {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .help("Already in whitelist")
@@ -232,5 +252,6 @@ private struct DiscoveryRow: View {
             }
         }
         .padding(.vertical, 2)
+        .opacity(isOwnRebroadcast ? 0.6 : 1)
     }
 }

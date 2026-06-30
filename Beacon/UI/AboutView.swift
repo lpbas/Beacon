@@ -59,14 +59,15 @@ struct AboutView: View {
     /// normal symbol (fallback).
     @ViewBuilder
     private var headerIcon: some View {
-        if usesCrispyIcon, let crispy = StatusBarIconManager.appPreviewImage(for: .crispy) {
-            Image(nsImage: crispy)
+        if let image = StatusBarIconManager.appPreviewImage(for: usesCrispyIcon ? .crispy : .normal) {
+            Image(nsImage: image)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 56, height: 56)
+                .frame(width: 104, height: 104)
+                .clipShape(RoundedRectangle(cornerRadius: 23, style: .continuous))
         } else {
             Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 56))
+                .font(.system(size: 72))
                 .foregroundStyle(.tint)
         }
     }

@@ -63,7 +63,11 @@ struct SettingsView: View {
                     Text("5 seconds").tag(5)
                     Text("10 seconds").tag(10)
                     Text("30 seconds").tag(30)
-                    Text("60 seconds").tag(60)
+                    Text("1 minute").tag(60)
+                    Text("2 minutes").tag(120)
+                    Text("3 minutes").tag(180)
+                    Text("5 minutes").tag(300)
+                    Text("10 minutes").tag(600)
                 }
                 .help("Wait before auto-starting, useful so Docker/containers finish booting first.")
             }

@@ -34,18 +34,30 @@ enum CrispyDefaults {
 enum StatusBarIconManager {
     /// Template menu bar image for the variant, or nil to fall back to the
     /// SF Symbol. Flagged as a template so it adapts to light/dark menu bars.
+    /// Menu bar icon height in points. The asset is scaled to this height with
+    /// its aspect preserved, so it fills the bar like other icons instead of
+    /// rendering a small padded slice of a 1024pt canvas.
+    static let menuBarHeight: CGFloat = 18
+
     static func statusBarImage(for variant: IconVariant) -> NSImage? {
         let name = variant == .crispy ? IconAsset.menuBarCrispy : IconAsset.menuBar
-        guard let image = NSImage(named: name), image.isValid, image.size.width > 0 else { return nil }
+        guard let base = NSImage(named: name), base.isValid, base.size.height > 0,
+              let image = base.copy() as? NSImage else { return nil }
         image.isTemplate = true
+        let aspect = base.size.width / base.size.height
+        image.size = NSSize(width: menuBarHeight * aspect, height: menuBarHeight)
         return image
     }
 
     /// Optional in-app app-icon preview for a variant (used by About), or nil to
     /// fall back to an SF Symbol. Only the crispy variant has a preview asset.
     static func appPreviewImage(for variant: IconVariant) -> NSImage? {
-        guard variant == .crispy else { return nil }
-        guard let image = NSImage(named: IconAsset.appCrispy), image.isValid, image.size.width > 0 else { return nil }
-        return image
+        switch variant {
+        case .normal:
+            return NSImage(named: IconAsset.app) ?? NSApplication.shared.applicationIconImage
+        case .crispy:
+            guard let image = NSImage(named: IconAsset.appCrispy), image.isValid, image.size.width > 0 else { return nil }
+            return image
+        }
     }
 }

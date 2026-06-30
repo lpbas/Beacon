@@ -20,6 +20,10 @@ final class BroadcastEngine {
     /// Observed per-entry run state, keyed by entry id.
     private(set) var states: [WhitelistEntry.ID: ServiceRunState] = [:]
 
+    /// Final advertised name per running entry. May differ from the requested
+    /// name when mDNS auto-renames a re-broadcast (e.g. "Name (2)").
+    private(set) var broadcastNames: [WhitelistEntry.ID: String] = [:]
+
     /// Entries the user wants running (survives transient resolve failures).
     @ObservationIgnored private var desiredRunning: Set<WhitelistEntry.ID> = []
     @ObservationIgnored private var active: [WhitelistEntry.ID: ActiveRegistration] = [:]
@@ -70,6 +74,10 @@ final class BroadcastEngine {
 
     var hasErrors: Bool { errorCount > 0 }
 
+    /// Names Beacon is currently advertising, used to flag our own re-broadcasts
+    /// in Discovery so they are not whitelisted by mistake.
+    var broadcastedNames: Set<String> { Set(broadcastNames.values) }
+
     // MARK: - Start / stop
 
     func start(_ entry: WhitelistEntry) {
@@ -82,6 +90,7 @@ final class BroadcastEngine {
         desiredRunning.remove(id)
         active[id]?.registrar.stop()
         active[id] = nil
+        broadcastNames[id] = nil
         setState(.stopped, for: id)
     }
 
@@ -118,6 +127,7 @@ final class BroadcastEngine {
         desiredRunning.remove(id)
         active[id]?.registrar.stop()
         active[id] = nil
+        broadcastNames[id] = nil
         setState(.failed(message), for: id)
     }
 
@@ -152,7 +162,8 @@ final class BroadcastEngine {
         registrar.register(name: entry.instanceName, type: type, port: resolved.port, txt: resolved.txtData) { [weak self] state in
             guard let self else { return }
             switch state {
-            case .registered:
+            case .registered(let finalName):
+                self.broadcastNames[entry.id] = finalName
                 self.setState(.broadcasting(serviceType: type, host: host, port: displayPort), for: entry.id)
             case .failed(let message):
                 self.handleFailure(message, for: entry.id)

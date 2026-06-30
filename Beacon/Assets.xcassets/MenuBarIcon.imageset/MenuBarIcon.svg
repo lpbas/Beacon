@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="154 154 718 718" fill="none" stroke="#000000" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Orbit ring: three arcs with gaps where the nodes sit -->
+  <path d="M318 245 A330 330 0 0 1 715 252"/>
+  <path d="M803 357 A330 330 0 0 1 466 839"/>
+  <path d="M337 792 A330 330 0 0 1 226 347"/>
+  <!-- Orbit nodes: one hollow, two filled -->
+  <circle cx="267" cy="291" r="40" stroke-width="24"/>
+  <circle cx="765" cy="300" r="46" fill="#000000" stroke="none"/>
+  <circle cx="399" cy="822" r="46" fill="#000000" stroke="none"/>
+  <!-- Vertical beacon -->
+  <line x1="512" y1="350" x2="512" y2="674" stroke-width="86"/>
+</svg>
