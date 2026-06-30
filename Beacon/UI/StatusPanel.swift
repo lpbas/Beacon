@@ -61,7 +61,11 @@ struct StatusPanel: View {
 
     private var subtitle: String {
         let broadcasting = engine.broadcastingCount
-        if broadcasting > 0 { return "\(broadcasting) broadcasting" }
+        let errors = engine.errorCount
+        if broadcasting > 0 {
+            return errors > 0 ? "\(broadcasting) broadcasting, \(errors) failed" : "\(broadcasting) broadcasting"
+        }
+        if errors > 0 { return errors == 1 ? "1 failed" : "\(errors) failed" }
         if engine.isAnyActive { return "Starting…" }
         return enabledEntries.isEmpty ? "No services" : "Idle"
     }

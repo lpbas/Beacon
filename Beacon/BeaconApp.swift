@@ -29,15 +29,11 @@ struct BeaconApp: App {
                 .environment(engine)
                 .environment(router)
         } label: {
-            // Crispy variant when unlocked + enabled and the asset is present;
-            // otherwise the normal state-reflecting SF Symbol (unchanged).
-            if usesCrispyIcon, let crispy = StatusBarIconManager.statusBarImage(for: .crispy) {
-                Image(nsImage: crispy)
-            } else {
-                Image(systemName: engine.isAnyActive
-                      ? "antenna.radiowaves.left.and.right"
-                      : "antenna.radiowaves.left.and.right.slash")
-            }
+            StatusBarLabel(
+                isBroadcasting: engine.broadcastingCount > 0,
+                hasError: engine.hasErrors,
+                usesCrispyIcon: usesCrispyIcon
+            )
         }
         .menuBarExtraStyle(.window)
 

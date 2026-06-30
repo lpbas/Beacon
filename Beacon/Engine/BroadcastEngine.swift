@@ -61,6 +61,15 @@ final class BroadcastEngine {
         }
     }
 
+    var errorCount: Int {
+        states.reduce(0) { count, pair in
+            if case .failed = pair.value { return count + 1 }
+            return count
+        }
+    }
+
+    var hasErrors: Bool { errorCount > 0 }
+
     // MARK: - Start / stop
 
     func start(_ entry: WhitelistEntry) {
@@ -94,13 +103,22 @@ final class BroadcastEngine {
 
     private func resolveAndRegister(_ entry: WhitelistEntry) async {
         guard let (type, resolved) = await resolveFirst(entry) else {
-            if desiredRunning.contains(entry.id) {
-                setState(.failed("Couldn’t resolve on any selected service type"), for: entry.id)
-            }
+            guard desiredRunning.contains(entry.id) else { return }
+            handleFailure("Couldn’t resolve on any selected service type", for: entry.id)
             return
         }
         guard desiredRunning.contains(entry.id) else { return }
         applyRegistration(entry: entry, type: type, resolved: resolved)
+    }
+
+    /// Mark a service failed and drop it from the active set, so its row shows a
+    /// retry (play) control instead of staying "running". Does not auto-retry;
+    /// the user taps play to try again.
+    private func handleFailure(_ message: String, for id: WhitelistEntry.ID) {
+        desiredRunning.remove(id)
+        active[id]?.registrar.stop()
+        active[id] = nil
+        setState(.failed(message), for: id)
     }
 
     /// Try each candidate service type in order (preferred first, then the
@@ -137,7 +155,7 @@ final class BroadcastEngine {
             case .registered:
                 self.setState(.broadcasting(serviceType: type, host: host, port: displayPort), for: entry.id)
             case .failed(let message):
-                self.setState(.failed(message), for: entry.id)
+                self.handleFailure(message, for: entry.id)
             case .registering, .idle:
                 break
             }
