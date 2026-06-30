@@ -81,7 +81,8 @@ struct SettingsView: View {
                     Text("Every hour").tag(60)
                 }
                 .help("Periodically re-resolve broadcasting services to catch container restarts.")
-                Toggle("Verbose logging", isOn: $store.settings.verboseLogging)
+                Toggle("Verbose diagnostics in Console.app", isOn: $store.settings.verboseLogging)
+                    .help("Includes discovery, resolve, register and auto-refresh details in Unified Logging.")
             }
 
             Section("Whitelist") {

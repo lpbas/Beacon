@@ -99,6 +99,21 @@ service types in Settings.
 Settings and the whitelist are stored as JSON in
 `~/Library/Application Support/Beacon/` (`settings.json` and `whitelist.json`).
 
+## Diagnostics
+
+Beacon logs to macOS Unified Logging with subsystem `com.lplaboratories.beacon`.
+Open Console.app and filter for `Beacon` or the subsystem, or stream logs in
+Terminal:
+
+```bash
+log stream --predicate 'subsystem == "com.lplaboratories.beacon"'
+```
+
+The Settings screen includes "Verbose diagnostics in Console.app". When it is
+off, Beacon logs app startup, persistence failures, DNS-SD failures and important
+state changes. When it is on, Beacon also logs discovery, resolve, registration,
+auto-refresh and network-change details. TXT values are not dumped into logs.
+
 ## Importing from the original script
 
 If you used `homekit-mdns-broadcaster` and have a `service_whitelist.txt`, open
@@ -134,14 +149,17 @@ beacon-selftest mirror   "My Service" _hap._tcp
 ## Releasing
 
 ```bash
-# One-time notarization setup (stores an app-specific password in the keychain):
+# One-time notarization setup (stores credentials in the keychain):
 xcrun notarytool store-credentials "beacon-notary" \
-    --apple-id "you@example.com" --team-id "<your-team-id>" \
-    --password "<app-specific-password>"
+    --apple-id "you@example.com" \
+    --team-id "<your-team-id>"
 
 # Build, sign with Developer ID, package a DMG, then notarize and staple:
-scripts/release.sh 0.1.0
+scripts/release.sh 1.0.0
 ```
+
+Omit `--password` so `notarytool` prompts securely. Do not store app-specific
+passwords in `.env` or shell history.
 
 If the notary profile is not present, the script still produces a signed DMG and
 skips notarization.

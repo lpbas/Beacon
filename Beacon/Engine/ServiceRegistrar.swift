@@ -1,5 +1,6 @@
 import Foundation
 import dnssd
+import OSLog
 
 /// Re-broadcasts a single service via `DNSServiceRegister`, holding the
 /// registration alive until `stop()`. Registers with host = NULL so the SRV
@@ -20,6 +21,7 @@ final class ServiceRegistrar {
     private(set) var state: State = .idle
     private var ref: DNSServiceRef?
     private var context: UnsafeMutableRawPointer?
+    private var requestedName: String?
     private var onState: ((State) -> Void)?
     private let queue = DispatchQueue(label: "beacon.register")
 
@@ -31,8 +33,12 @@ final class ServiceRegistrar {
                   txt: Data,
                   onState: @escaping (State) -> Void) {
         stop()
+        requestedName = name
         self.onState = onState
         set(.registering)
+        if BeaconLog.isVerboseEnabled {
+            BeaconLog.registrar.info("Registering \(name, privacy: .private) as \(type, privacy: .public) on port \(UInt16(bigEndian: port), privacy: .public) with \(txt.count, privacy: .public) TXT bytes")
+        }
 
         let context = Unmanaged.passRetained(self).toOpaque()
         self.context = context
@@ -44,8 +50,12 @@ final class ServiceRegistrar {
             let finalName = name.map { String(cString: $0) } ?? ""
             DispatchQueue.main.async {
                 if errorCode.isOK {
+                    if BeaconLog.isVerboseEnabled {
+                        BeaconLog.registrar.info("Registered as \(finalName, privacy: .private)")
+                    }
                     registrar.set(.registered(name: finalName))
                 } else {
+                    BeaconLog.registrar.error("Register reply failed for \(finalName, privacy: .private): \(DNSSDError.message(for: errorCode), privacy: .public)")
                     registrar.set(.failed(DNSSDError(code: errorCode, context: "Register reply").localizedDescription))
                 }
             }
@@ -71,6 +81,7 @@ final class ServiceRegistrar {
         guard err.isOK, let ref else {
             self.context = nil
             Unmanaged<ServiceRegistrar>.fromOpaque(context).release()
+            BeaconLog.registrar.error("DNSServiceRegister failed for \(name, privacy: .private) as \(type, privacy: .public): \(DNSSDError.message(for: err), privacy: .public)")
             set(.failed(DNSSDError(code: err, context: "DNSServiceRegister(\(name))").localizedDescription))
             return
         }
@@ -82,8 +93,12 @@ final class ServiceRegistrar {
         onState = nil
         let ref = self.ref; self.ref = nil
         let context = self.context; self.context = nil
+        let requestedName = self.requestedName; self.requestedName = nil
         if state != .idle { set(.idle) }
         guard ref != nil || context != nil else { return }
+        if BeaconLog.isVerboseEnabled {
+            BeaconLog.registrar.info("Stopping registration for \(requestedName ?? "unknown", privacy: .private)")
+        }
         queue.async {
             if let ref { DNSServiceRefDeallocate(ref) }
             if let context { Unmanaged<ServiceRegistrar>.fromOpaque(context).release() }

@@ -63,8 +63,8 @@ enum StatusBarIconManager {
     static let menuBarHeight: CGFloat = 18
 
     /// Fully composed status item image for the variant and run state. The
-    /// source glyph is drawn in menu-bar white, while the status dot remains
-    /// red/green.
+    /// source glyph is drawn with the current system label color, while the
+    /// status dot remains red/green.
     static func statusBarImage(for variant: IconVariant, state: MenuBarIconState) -> NSImage? {
         guard let source = menuBarSourceImage(for: variant) ?? fallbackStatusBarSourceImage() else {
             return nil
@@ -87,6 +87,7 @@ enum StatusBarIconManager {
             return true
         }
         image.isTemplate = false
+        image.cacheMode = .never
         image.size = canvasSize
         return image
     }
@@ -115,7 +116,7 @@ enum StatusBarIconManager {
 
     private static func drawTemplateGlyph(_ image: NSImage, in rect: NSRect, alpha: CGFloat) {
         NSGraphicsContext.saveGraphicsState()
-        NSColor.white.withAlphaComponent(alpha).setFill()
+        NSColor.labelColor.withAlphaComponent(alpha).setFill()
         rect.fill()
         image.draw(in: rect, from: .zero, operation: .destinationIn, fraction: 1)
         NSGraphicsContext.restoreGraphicsState()

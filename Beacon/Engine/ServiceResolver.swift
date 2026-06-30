@@ -1,5 +1,6 @@
 import Foundation
 import dnssd
+import OSLog
 
 /// The outcome of resolving a single service instance.
 struct ResolvedService {
@@ -28,48 +29,99 @@ enum ServiceResolver {
                         interfaceIndex: UInt32 = 0,
                         timeout: TimeInterval = 3) async throws -> ResolvedService {
         let queue = DispatchQueue(label: "beacon.resolve")
-        return try await withCheckedThrowingContinuation { continuation in
-            let op = ResolveOperation(continuation: continuation)
-            let context = Unmanaged.passRetained(op).toOpaque()
-            op.selfPtr = context
-
-            var ref: DNSServiceRef?
-            let err = DNSServiceResolve(
-                &ref,
-                0,
-                interfaceIndex,
-                name,
-                type,
-                domain,
-                { _, _, ifIndex, errorCode, fullname, hosttarget, port, txtLen, txtRecord, context in
-                    guard let context else { return }
-                    let op = Unmanaged<ResolveOperation>.fromOpaque(context).takeUnretainedValue()
-                    op.handleReply(errorCode: errorCode,
-                                   ifIndex: ifIndex,
-                                   fullname: fullname,
-                                   hosttarget: hosttarget,
-                                   port: port,
-                                   txtLen: txtLen,
-                                   txtRecord: txtRecord)
-                },
-                context
-            )
-
-            guard err.isOK, let ref else {
-                op.fail(with: DNSSDError(code: err, context: "DNSServiceResolve(\(name))"))
-                return
-            }
-
-            op.ref = ref
-            DNSServiceSetDispatchQueue(ref, queue)
-
-            let timeoutItem = DispatchWorkItem {
-                op.fail(with: DNSSDError(code: DNSServiceErrorType(kDNSServiceErr_Timeout),
-                                        context: "Resolving \"\(name)\" as \(type)"))
-            }
-            op.timeoutItem = timeoutItem
-            queue.asyncAfter(deadline: .now() + timeout, execute: timeoutItem)
+        let cancellationBox = ResolveCancellationBox()
+        try Task.checkCancellation()
+        if BeaconLog.isVerboseEnabled {
+            BeaconLog.resolver.info("Resolving \(name, privacy: .private) as \(type, privacy: .public) on interface \(interfaceIndex, privacy: .public)")
         }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let op = ResolveOperation(name: name,
+                                          type: type,
+                                          queue: queue,
+                                          continuation: continuation) {
+                    cancellationBox.clear($0)
+                }
+                let context = Unmanaged.passRetained(op).toOpaque()
+                op.selfPtr = context
+
+                var ref: DNSServiceRef?
+                let err = DNSServiceResolve(
+                    &ref,
+                    0,
+                    interfaceIndex,
+                    name,
+                    type,
+                    domain,
+                    { _, _, ifIndex, errorCode, fullname, hosttarget, port, txtLen, txtRecord, context in
+                        guard let context else { return }
+                        let op = Unmanaged<ResolveOperation>.fromOpaque(context).takeUnretainedValue()
+                        op.handleReply(errorCode: errorCode,
+                                       ifIndex: ifIndex,
+                                       fullname: fullname,
+                                       hosttarget: hosttarget,
+                                       port: port,
+                                       txtLen: txtLen,
+                                       txtRecord: txtRecord)
+                    },
+                    context
+                )
+
+                guard err.isOK, let ref else {
+                    BeaconLog.resolver.error("DNSServiceResolve failed for \(name, privacy: .private) as \(type, privacy: .public): \(DNSSDError.message(for: err), privacy: .public)")
+                    op.fail(with: DNSSDError(code: err, context: "DNSServiceResolve(\(name))"))
+                    return
+                }
+
+                op.ref = ref
+                DNSServiceSetDispatchQueue(ref, queue)
+
+                let timeoutItem = DispatchWorkItem {
+                    op.fail(with: DNSSDError(code: DNSServiceErrorType(kDNSServiceErr_Timeout),
+                                            context: "Resolving \"\(name)\" as \(type)"))
+                }
+                op.timeoutItem = timeoutItem
+                queue.asyncAfter(deadline: .now() + timeout, execute: timeoutItem)
+
+                guard cancellationBox.set(op) else {
+                    op.cancel()
+                    return
+                }
+            }
+        } onCancel: {
+            cancellationBox.cancel()
+        }
+    }
+}
+
+private final class ResolveCancellationBox {
+    private let lock = NSLock()
+    private var operation: ResolveOperation?
+    private var isCancelled = false
+
+    func set(_ operation: ResolveOperation) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isCancelled else { return false }
+        self.operation = operation
+        return true
+    }
+
+    func cancel() {
+        lock.lock()
+        isCancelled = true
+        let operation = self.operation
+        self.operation = nil
+        lock.unlock()
+        operation?.cancel()
+    }
+
+    func clear(_ operation: ResolveOperation) {
+        lock.lock()
+        if self.operation === operation {
+            self.operation = nil
+        }
+        lock.unlock()
     }
 }
 
@@ -80,11 +132,24 @@ private final class ResolveOperation {
     var ref: DNSServiceRef?
     var timeoutItem: DispatchWorkItem?
     var selfPtr: UnsafeMutableRawPointer?
+    private let queue: DispatchQueue
+    private let lock = NSLock()
     private var finished = false
+    private let name: String
+    private let type: String
     private let continuation: CheckedContinuation<ResolvedService, Error>
+    private let onFinish: (ResolveOperation) -> Void
 
-    init(continuation: CheckedContinuation<ResolvedService, Error>) {
+    init(name: String,
+         type: String,
+         queue: DispatchQueue,
+         continuation: CheckedContinuation<ResolvedService, Error>,
+         onFinish: @escaping (ResolveOperation) -> Void) {
+        self.name = name
+        self.type = type
+        self.queue = queue
         self.continuation = continuation
+        self.onFinish = onFinish
     }
 
     func handleReply(errorCode: DNSServiceErrorType,
@@ -94,8 +159,8 @@ private final class ResolveOperation {
                      port: UInt16,
                      txtLen: UInt16,
                      txtRecord: UnsafePointer<UInt8>?) {
-        guard !finished else { return }
         guard errorCode.isOK else {
+            BeaconLog.resolver.error("Resolve reply failed for \(self.name, privacy: .private) as \(self.type, privacy: .public): \(DNSSDError.message(for: errorCode), privacy: .public)")
             fail(with: DNSSDError(code: errorCode, context: "Resolve reply"))
             return
         }
@@ -107,26 +172,48 @@ private final class ResolveOperation {
                                      port: port,
                                      txtData: txt,
                                      interfaceIndex: ifIndex)
-        finish { $0.resume(returning: result) }
+        guard finish({ $0.resume(returning: result) }) else { return }
+        if BeaconLog.isVerboseEnabled {
+            BeaconLog.resolver.info("Resolved \(self.name, privacy: .private) as \(self.type, privacy: .public) to \(host, privacy: .private):\(result.displayPort, privacy: .public) with \(txt.count, privacy: .public) TXT bytes")
+        }
     }
 
-    func fail(with error: Error) {
-        guard !finished else { return }
-        finish { $0.resume(throwing: error) }
+    @discardableResult
+    func fail(with error: Error, shouldLog: Bool = true) -> Bool {
+        guard finish({ $0.resume(throwing: error) }) else { return false }
+        if shouldLog, BeaconLog.isVerboseEnabled {
+            BeaconLog.resolver.debug("Resolve finished with error for \(self.name, privacy: .private) as \(self.type, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        return true
     }
 
-    private func finish(_ body: (CheckedContinuation<ResolvedService, Error>) -> Void) {
+    func cancel() {
+        queue.async {
+            self.fail(with: CancellationError(), shouldLog: false)
+        }
+    }
+
+    @discardableResult
+    private func finish(_ body: (CheckedContinuation<ResolvedService, Error>) -> Void) -> Bool {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return false
+        }
         finished = true
+        let timeoutItem = self.timeoutItem
+        let ref = self.ref
+        let selfPtr = self.selfPtr
+        self.timeoutItem = nil
+        self.ref = nil
+        self.selfPtr = nil
+        lock.unlock()
+
         timeoutItem?.cancel()
-        timeoutItem = nil
-        if let ref {
-            DNSServiceRefDeallocate(ref)
-            self.ref = nil
-        }
+        if let ref { DNSServiceRefDeallocate(ref) }
         body(continuation)
-        if let selfPtr {
-            self.selfPtr = nil
-            Unmanaged<ResolveOperation>.fromOpaque(selfPtr).release()
-        }
+        onFinish(self)
+        if let selfPtr { Unmanaged<ResolveOperation>.fromOpaque(selfPtr).release() }
+        return true
     }
 }

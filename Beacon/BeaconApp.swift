@@ -1,4 +1,5 @@
 import SwiftUI
+import OSLog
 
 /// Stable identifiers for the app's windows, used with `openWindow(id:)`.
 enum WindowID {
@@ -16,6 +17,7 @@ struct BeaconApp: App {
     @AppStorage(CrispyDefaults.usesCrispy) private var usesCrispyIcon = false
 
     init() {
+        BeaconLog.app.notice("Beacon launching")
         let store = Store()
         _store = State(initialValue: store)
         _engine = State(initialValue: BroadcastEngine(store: store))

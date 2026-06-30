@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 
 /// Owns the persisted app state (whitelist + settings) as JSON files in
 /// Application Support, and is the single source of truth shared across screens.
@@ -7,7 +8,13 @@ import Observation
 @MainActor
 final class Store {
     var settings: AppSettings {
-        didSet { if settings != oldValue { saveSettings() } }
+        didSet {
+            guard settings != oldValue else { return }
+            if settings.verboseLogging != oldValue.verboseLogging {
+                BeaconLog.setVerboseLogging(settings.verboseLogging)
+            }
+            saveSettings()
+        }
     }
     private(set) var entries: [WhitelistEntry]
 
@@ -29,6 +36,8 @@ final class Store {
 
         settings = Self.load(AppSettings.self, from: settingsURL) ?? .default
         entries = Self.load([WhitelistEntry].self, from: entriesURL) ?? []
+        BeaconLog.setVerboseLogging(settings.verboseLogging, announce: false)
+        BeaconLog.store.notice("Loaded settings and \(self.entries.count, privacy: .public) whitelist entries")
     }
 
     // MARK: - Entry mutations
@@ -98,7 +107,9 @@ final class Store {
             .filter { !$0.isEmpty && !$0.hasPrefix("#") }
         let before = entries.count
         for name in names { addEntry(instanceName: name) }
-        return entries.count - before
+        let importedCount = entries.count - before
+        BeaconLog.store.notice("Imported \(importedCount, privacy: .public) whitelist entries from legacy file")
+        return importedCount
     }
 
     // MARK: - Persistence
@@ -116,7 +127,7 @@ final class Store {
             let data = try JSONEncoder.beacon.encode(value)
             try data.write(to: url, options: .atomic)
         } catch {
-            NSLog("Beacon: failed to save \(url.lastPathComponent): \(error)")
+            BeaconLog.store.error("Failed to save \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 }

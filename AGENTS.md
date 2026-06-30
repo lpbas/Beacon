@@ -182,15 +182,31 @@ There is no dedicated automated test suite in the repo today. For engine work,
 use the self-test CLI and compare against the system `dns-sd` tool where useful.
 For UI work, build the app and manually exercise the affected screen.
 
+## Diagnostics
+
+Beacon uses macOS Unified Logging with subsystem `com.lplaboratories.beacon`.
+Users can inspect logs in Console.app or with:
+
+```bash
+log stream --predicate 'subsystem == "com.lplaboratories.beacon"'
+```
+
+Normal logging should stay concise: startup, persistence failures, DNS-SD
+failures, and important state changes. The persisted `verboseLogging` setting
+enables detailed discovery, resolve, registration, auto-refresh and network path
+logs. Do not log raw TXT values; log counts or keys only.
+
 ## Release Flow
 
 Release signing reads local variables from `.env`, which is ignored. Start from
 `.env.example` and never commit real signing credentials.
+Notarization credentials should live in a `notarytool` Keychain profile, not in
+`.env`; let `notarytool store-credentials` prompt for app-specific passwords.
 
 Release command:
 
 ```bash
-scripts/release.sh 0.1.0
+scripts/release.sh 1.0.0
 ```
 
 The script regenerates the Xcode project, builds Release with Developer ID and

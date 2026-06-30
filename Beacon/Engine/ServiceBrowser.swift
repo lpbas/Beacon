@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import dnssd
+import OSLog
 
 /// A service instance discovered by browsing (not yet resolved).
 struct DiscoveredService: Identifiable, Hashable {
@@ -33,6 +34,9 @@ final class ServiceBrowser {
     func start(types: [String]) {
         stop()
         guard !types.isEmpty else { return }
+        if BeaconLog.isVerboseEnabled {
+            BeaconLog.browser.info("Starting browse for \(types.count, privacy: .public) service types")
+        }
         isBrowsing = true
         for type in types { browse(type: type) }
     }
@@ -43,6 +47,9 @@ final class ServiceBrowser {
         services.removeAll()
         isBrowsing = false
         guard !refs.isEmpty || !contexts.isEmpty else { return }
+        if BeaconLog.isVerboseEnabled {
+            BeaconLog.browser.info("Stopping browse and releasing \(refs.count, privacy: .public) DNS-SD refs")
+        }
         // Deallocate on the same serial queue the callbacks use, so we never tear
         // down a ref while a callback for it is running.
         queue.async {
@@ -61,7 +68,12 @@ final class ServiceBrowser {
             type,
             "local",
             { _, flags, ifIndex, errorCode, serviceName, regtype, replyDomain, context in
-                guard let context, errorCode.isOK else { return }
+                guard let context else { return }
+                guard errorCode.isOK else {
+                    let failedType = regtype.map { String(cString: $0) } ?? "unknown"
+                    BeaconLog.browser.error("Browse callback failed for \(failedType, privacy: .public): \(DNSSDError.message(for: errorCode), privacy: .public)")
+                    return
+                }
                 let browser = Unmanaged<ServiceBrowser>.fromOpaque(context).takeUnretainedValue()
                 let isAdd = (flags & DNSServiceFlags(kDNSServiceFlagsAdd)) != 0
                 let svc = DiscoveredService(
@@ -77,18 +89,30 @@ final class ServiceBrowser {
 
         guard err.isOK, let ref else {
             Unmanaged<ServiceBrowser>.fromOpaque(context).release()
+            BeaconLog.browser.error("DNSServiceBrowse failed for \(type, privacy: .public): \(DNSSDError.message(for: err), privacy: .public)")
             return
         }
         DNSServiceSetDispatchQueue(ref, queue)
         refs.append(ref)
         contexts.append(context)
+        if BeaconLog.isVerboseEnabled {
+            BeaconLog.browser.info("Browsing \(type, privacy: .public)")
+        }
     }
 
     private func apply(_ service: DiscoveredService, isAdd: Bool) {
         if isAdd {
-            if !services.contains(service) { services.append(service) }
+            if !services.contains(service) {
+                services.append(service)
+                if BeaconLog.isVerboseEnabled {
+                    BeaconLog.browser.debug("Discovered \(service.name, privacy: .private) as \(service.serviceType, privacy: .public)")
+                }
+            }
         } else {
             services.removeAll { $0 == service }
+            if BeaconLog.isVerboseEnabled {
+                BeaconLog.browser.debug("Removed discovered service \(service.name, privacy: .private) as \(service.serviceType, privacy: .public)")
+            }
         }
     }
 }
