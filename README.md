@@ -162,10 +162,14 @@ project.yml                XcodeGen project definition
 
 ## Roadmap
 
-- App icon (the app currently uses a system symbol).
 - Optional Mac App Store build (add the App Sandbox and network entitlements).
 
 ## Credit and license
 
-Based on the original `homekit-mdns-broadcaster` script. Released under the MIT
+Based on the original [homekit-mdns-broadcaster](https://github.com/lpbas/homekit-mdns-broadcaster) script. Released under the MIT
 License. See the LICENSE file.
+
+## Anything else?
+
+Beacon is not bacon, though there may be an extra-crispy surprise hidden in the
+app.

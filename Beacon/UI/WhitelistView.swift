@@ -140,7 +140,7 @@ private struct AddServiceSheet: View {
             Text("Enter the exact instance name as it appears on the network (as seen in Discovery or `dns-sd -B`).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            TextField("e.g. HASS Bridge WP C94970 (2)", text: $name)
+            TextField("e.g. HASS Bridge WP C12340", text: $name)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(commit)
 

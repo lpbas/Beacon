@@ -4,7 +4,7 @@ import Foundation
 /// instance name (as seen in `dns-sd -B`); the service type is learned on resolve.
 struct WhitelistEntry: Identifiable, Codable, Hashable {
     var id: UUID
-    /// Exact instance name, e.g. "HASS Bridge WP C94970 (2)".
+    /// Exact instance name, e.g. "HASS Bridge WP C94970".
     var instanceName: String
     /// Service type that last resolved (tried first next time), e.g. "_hap._tcp".
     var preferredServiceType: String?

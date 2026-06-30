@@ -41,15 +41,22 @@ struct AboutView: View {
                 Link(destination: URL(string: "https://github.com/orbstack/orbstack/issues/342")!) {
                     Label("OrbStack issue #342", systemImage: "link")
                 }
-                Link(destination: URL(string: "https://github.com/")!) {
+                Link(destination: URL(string: "https://github.com/lpbas/Beacon")!) {
                     Label("Source on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                Link(destination: URL(string: "https://github.com/lpbas/homekit-mdns-broadcaster")!) {
+                    Label("Original script", systemImage: "terminal")
                 }
             }
             .font(.callout)
 
-            Text("Based on the homekit-mdns-broadcaster script. MIT License.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            HStack(spacing: 3) {
+                Text("Based on the")
+                Link("homekit-mdns-broadcaster", destination: URL(string: "https://github.com/lpbas/homekit-mdns-broadcaster")!)
+                Text("script. MIT License.")
+            }
+            .font(.caption)
+            .foregroundStyle(.tertiary)
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
