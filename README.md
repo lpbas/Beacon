@@ -4,7 +4,7 @@ Beacon is a native macOS menu bar app that re-broadcasts Bonjour/mDNS services o
 your local network, so other devices can see services that Docker/OrbStack on
 macOS will not relay, such as HomeKit bridges, Home Assistant, and more.
 
-It is a GUI successor to the `homekit-mdns-broadcaster` script, rebuilt in pure
+It is a GUI successor to the [homekit-mdns-broadcaster](https://github.com/lpbas/homekit-mdns-broadcaster) script, rebuilt in pure
 Swift on top of the system `dns_sd` API (the same daemon the `dns-sd` command
 talks to). There is no Python and no spawning of `dns-sd` subprocesses, and you
 get true per-service control.
