@@ -64,6 +64,13 @@ helpers in `DNSSD.swift` are for display and for fresh self-test registrations.
 Avoid replacing the raw mirrored TXT data with parsed/re-encoded data unless that
 is the explicit feature being built.
 
+Registration is also scoped to one interface, chosen in `LanInterfaces.swift` from
+`NWPath`: a wired or Wi-Fi interface that has an address. `interfaceIndex: 0` means
+"every interface the daemon is on", which includes the container bridges where the
+original advertisement lives; publishing the same instance name there makes the
+daemon rename the re-broadcast to "Name (2)" on every interface, the LAN included.
+Keep the scoping, and keep `ServiceRegistrar` logging renames at error level.
+
 ## Runtime Architecture
 
 `Store` is the persisted source of truth. It is `@Observable` and `@MainActor`,
@@ -85,6 +92,13 @@ and owns:
 The engine resolves each entry by trying the entry's `preferredServiceType`
 first, then the selected service types from settings. On a successful resolve it
 records the last host, port, service type, and date back into the store.
+
+Failures are retried rather than dropped: an entry the user wants running stays in
+`desiredRunning`, moves to `.retrying(message:attempt:)`, and is retried on the
+backoff schedule in `BroadcastEngine.retryDelays`. Only when that schedule is
+exhausted does it become a terminal `.failed`. The engine also tracks the LAN
+interface from `NWPath` and re-binds live registrations when it changes (Wi-Fi to
+Ethernet, or the tunnel that owns the default route).
 
 `ServiceBrowser`, `ServiceResolver`, and `ServiceRegistrar` each own DNS-SD refs
 and dispatch queues. Be careful with lifetime management: callbacks use retained
@@ -121,9 +135,10 @@ for persisted or broadcast state.
 ## Service Types and Local Network Permissions
 
 `ServiceTypeCatalog.swift` defines service groups and friendly labels. Settings
-select groups plus custom literal service types. Discovery excludes
-`_services._dns-sd._udp` because it is a meta enumeration query, not a browsable
-instance type.
+select groups plus custom literal service types. Discovery and the resolve order
+both exclude `_services._dns-sd._udp` (see `ServiceType.isMetaQuery`) because it is
+a meta enumeration query, not a browsable instance type: resolving it can only ever
+time out.
 
 `Info.plist` contains `NSBonjourServices` and
 `NSLocalNetworkUsageDescription`. If you add service types to the catalog that
@@ -178,9 +193,21 @@ beacon-selftest register "Test Service" _http._tcp 8080
 beacon-selftest mirror "My Service" _hap._tcp
 ```
 
-There is no dedicated automated test suite in the repo today. For engine work,
-use the self-test CLI and compare against the system `dns-sd` tool where useful.
-For UI work, build the app and manually exercise the affected screen.
+There is no XCTest target in the repo. The `beacon-selftest` CLI compiles the real
+engine and model layer, and is the regression harness for engine work:
+
+```bash
+beacon-selftest interfaces                        # which interface Beacon will publish on
+beacon-selftest rename-probe "Test" _hap._tcp 0 3 # 0 = all interfaces (the old behaviour)
+beacon-selftest rebind "Test" _hap._tcp 1 15    # moving interfaces releases the old one
+beacon-selftest engine 30                         # drive BroadcastEngine on the real config
+```
+
+`scripts/build-local.sh [debug|release]` builds that CLI with the Command Line Tools
+toolchain alone. The app target needs a full Xcode install, because SwiftUI's
+property-wrapper macros are resolved by `libSwiftUIMacros.dylib`, which only ships
+with Xcode. Compare against the system `dns-sd` tool where useful. For UI work, build
+the app and manually exercise the affected screen.
 
 ## Diagnostics
 
@@ -211,7 +238,10 @@ scripts/release.sh 1.0.0
 
 The script regenerates the Xcode project, builds Release with Developer ID and
 hardened runtime, verifies the signature, creates a DMG under `dist/`, and
-notarizes/staples when the configured notary profile exists.
+notarizes/staples when the configured notary profile exists. It passes the version
+you give it through to `MARKETING_VERSION`, so the bundle version matches the DMG
+filename (`BEACON_BUILD_NUMBER` overrides the default build number taken from the
+commit count).
 
 ## Development Guidelines
 
@@ -224,6 +254,12 @@ notarizes/staples when the configured notary profile exists.
 - Preserve the host-nil registration behavior unless the product requirement
   explicitly changes. It is the core workaround.
 - Preserve the network-byte-order port path from resolve to register.
+- Keep the re-broadcast scoped to a LAN-facing interface; do not go back to
+  `interfaceIndex: 0` (see "How Beacon Works").
+- Keep transient failures retryable: a service the user wants running should not sit
+  in a terminal failure state while its retry schedule still has budget.
+- Keep `beacon-selftest` building and useful, and keep the file set of that target in
+  step with `project.yml` when the engine gains dependencies.
 - Stop active broadcasts when deleting or disabling whitelist entries.
 - Do not whitelist Beacon's own re-broadcasts from Discovery.
 - Avoid adding subprocess dependencies for DNS-SD. This project is deliberately

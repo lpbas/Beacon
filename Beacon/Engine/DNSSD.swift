@@ -33,6 +33,22 @@ struct DNSSDError: LocalizedError {
         case kDNSServiceErr_NoAuth: return "No authentication"
         case kDNSServiceErr_NoSuchKey: return "No such key"
         case kDNSServiceErr_Timeout: return "Timed out"
+        case kDNSServiceErr_NATTraversal: return "NAT traversal required"
+        case kDNSServiceErr_DoubleNAT: return "Double NAT"
+        case kDNSServiceErr_BadTime: return "Bad time"
+        case kDNSServiceErr_BadSig: return "Bad signature"
+        case kDNSServiceErr_BadKey: return "Bad key"
+        case kDNSServiceErr_Transient: return "Transient error, try again"
+        case kDNSServiceErr_ServiceNotRunning: return "DNS-SD daemon is not running"
+        case kDNSServiceErr_NATPortMappingUnsupported: return "Router does not support NAT port mapping"
+        case kDNSServiceErr_NATPortMappingDisabled: return "NAT port mapping is disabled on the router"
+        case kDNSServiceErr_NoRouter: return "No router configured"
+        case kDNSServiceErr_PollingMode: return "Daemon is in polling mode"
+        case kDNSServiceErr_DefunctConnection: return "Connection to the DNS-SD daemon was lost"
+        case kDNSServiceErr_PolicyDenied: return "Denied by policy (check Local Network permission)"
+        case kDNSServiceErr_NotPermitted: return "Not permitted"
+        case kDNSServiceErr_StaleData: return "Daemon returned stale data"
+        case kDNSServiceErr_AWDLTimeout: return "AWDL timed out"
         default: return "Error \(code)"
         }
     }
@@ -89,6 +105,16 @@ enum TXT {
 
 /// Convenience helpers on a Bonjour service type string.
 enum ServiceType {
+    /// The DNS-SD service-type enumeration meta query. It lists service *types*
+    /// rather than instances, so it can never be resolved or re-broadcast — but it
+    /// is a selectable group in Settings.
+    static let metaQuery = "_services._dns-sd._udp"
+
+    /// `true` for the meta query above, with or without the trailing dot.
+    static func isMetaQuery(_ type: String) -> Bool {
+        trimmingTrailingDot(type) == metaQuery
+    }
+
     /// Strip a trailing dot from a regtype/domain returned by the daemon,
     /// e.g. "_hap._tcp." -> "_hap._tcp", "local." -> "local".
     static func trimmingTrailingDot(_ s: String) -> String {

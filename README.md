@@ -34,6 +34,10 @@ on the underlying issue: https://github.com/orbstack/orbstack/issues/342
 - Auto-refresh and network awareness: Beacon can periodically re-resolve running
   services and also reacts to network changes, so a container restart or a new IP
   address is picked up automatically.
+- Automatic retry: a service that cannot be resolved or registered is retried on a
+  backoff schedule (5 seconds up to 5 minutes) instead of sitting failed until you
+  press play. Its row reads `Retrying...` while that is happening, so a Mac that
+  starts before its containers recovers on its own.
 - Pure native Swift, launch at login via `SMAppService`, and a design that keeps
   the door open to a future Mac App Store build.
 
@@ -92,6 +96,19 @@ service types in Settings.
 - Re-broadcasting uses `DNSServiceRegister` with the host set to NULL, so the SRV
   target points at the local machine. This is the key detail that makes the
   container reachable at the host's address, and it mirrors what `dns-sd -R` does.
+- Re-broadcasting is scoped to one interface: the primary LAN-facing one (wired or
+  Wi-Fi, with an address), picked from `NWPath` in `LanInterfaces.swift`. Passing
+  `0` means "every interface the daemon is on", which includes the Docker/OrbStack
+  container bridges and the VPN tunnels. The original advertisement lives on the
+  container bridge, so publishing the same instance name there collides with the
+  original record and the daemon renames the re-broadcast to "Name (2)" -- on every
+  interface, the LAN included. `beacon-selftest interfaces` shows what your Mac
+  picks, and `rename-probe` shows what the daemon does with and without the scope.
+- If a registration is renamed anyway, Beacon logs it at error level, so a LAN that
+  sees a different instance name than the source service has shows up in Console.app.
+- Resolving tries the service type that worked last time first, then the remaining
+  candidates in parallel batches, so an unresolvable name costs one timeout instead
+  of one per candidate.
 - TXT records are round-tripped byte for byte, so the re-broadcast carries the same
   metadata as the original service.
 - Registrations are withdrawn automatically when Beacon quits.
@@ -133,6 +150,17 @@ open Beacon.xcodeproj
 xcodebuild -project Beacon.xcodeproj -scheme Beacon -configuration Debug build
 ```
 
+A full Xcode install is required for the app target: SwiftUI's property wrappers are
+compiler macros, and their plugin (`libSwiftUIMacros.dylib`) ships only inside Xcode,
+so the Command Line Tools alone cannot compile it. The engine, the model layer and
+the self-test CLI have no SwiftUI dependency, and `scripts/build-local.sh` builds the
+CLI with the Command Line Tools toolchain alone (it builds the app the normal way
+when Xcode is present):
+
+```bash
+scripts/build-local.sh debug     # -> build/local-debug/beacon-selftest
+```
+
 ### Self-test CLI
 
 `SelfTest/` builds a small command line tool, `beacon-selftest`, that exercises the
@@ -144,6 +172,20 @@ beacon-selftest browse   _hap._tcp
 beacon-selftest resolve  "My Service" _hap._tcp
 beacon-selftest register "Test Service" _http._tcp 8080
 beacon-selftest mirror   "My Service" _hap._tcp
+beacon-selftest interfaces
+beacon-selftest rename-probe "My Service" _hap._tcp 0 3
+beacon-selftest rebind   "My Service" _hap._tcp 1 15
+beacon-selftest engine 30
+```
+
+The CLI compiles the real engine and model layer, which is what makes it useful as
+a regression harness: `engine` drives the actual `BroadcastEngine` against your real
+settings and whitelist, and `rename-probe` reports whether the daemon renames a
+registration. Run `interfaces` first and pass the interface index it prints to
+`rename-probe` to see the difference from `0`. The same decisions are visible live:
+
+```bash
+log stream --predicate 'subsystem == "com.lplaboratories.beacon"'
 ```
 
 ## Releasing

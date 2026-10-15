@@ -26,6 +26,7 @@ struct ServiceStateBadge: View {
         case .stopped: "Stopped"
         case .resolving: "Resolving…"
         case .broadcasting: "Broadcasting"
+        case .retrying(_, let attempt): attempt > 1 ? "Retrying (attempt \(attempt))…" : "Retrying…"
         case .failed(let message): message
         }
     }
@@ -35,6 +36,7 @@ struct ServiceStateBadge: View {
         case .stopped: .secondary
         case .resolving: .orange
         case .broadcasting: .green
+        case .retrying: .orange
         case .failed: .red
         }
     }

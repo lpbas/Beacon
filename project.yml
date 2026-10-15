@@ -47,9 +47,12 @@ targets:
     type: tool
     platform: macOS
     sources:
+      # The CLI deliberately compiles the real engine and model layer, so it can
+      # exercise (and regression-test) the exact code the app runs, including the
+      # `engine` command that drives BroadcastEngine against the real config.
       - path: Beacon/Engine
-        excludes:
-          - "BroadcastEngine.swift"   # depends on Model/, not needed by the CLI
+      - path: Beacon/Model
+      - path: Beacon/Diagnostics.swift
       - path: SelfTest
     settings:
       base:

@@ -45,6 +45,6 @@ struct AppSettings: Codable, Equatable {
     /// Service types to browse on the Discovery screen (same set, minus the
     /// meta enumeration query which isn't a browsable instance type).
     var discoveryServiceTypes: [String] {
-        resolveServiceTypes.filter { $0 != "_services._dns-sd._udp" }
+        resolveServiceTypes.filter { !ServiceType.isMetaQuery($0) }
     }
 }

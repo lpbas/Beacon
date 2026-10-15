@@ -26,6 +26,9 @@ fi
 : "${BEACON_SIGN_IDENTITY:?Set BEACON_SIGN_IDENTITY in .env (copy .env.example to .env)}"
 
 VERSION="${1:-1.0.0}"
+# Pass the version through to the bundle: otherwise the DMG is named for $VERSION
+# while the app inside still reports MARKETING_VERSION from project.yml.
+BUILD_NUMBER="${BEACON_BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
 TEAM="$BEACON_TEAM_ID"
 SIGN_ID="$BEACON_SIGN_IDENTITY"
 NOTARY_PROFILE="${BEACON_NOTARY_PROFILE:-beacon-notary}"
@@ -39,6 +42,7 @@ echo "▶︎ Building Release (Developer ID, hardened runtime)…"
 xcodebuild -project Beacon.xcodeproj -scheme Beacon -configuration Release \
   -destination 'platform=macOS' -derivedDataPath build \
   CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$SIGN_ID" DEVELOPMENT_TEAM="$TEAM" \
+  MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO ENABLE_DEBUG_DYLIB=NO \
   OTHER_CODE_SIGN_FLAGS="--timestamp" ENABLE_HARDENED_RUNTIME=YES \
   clean build >/dev/null
